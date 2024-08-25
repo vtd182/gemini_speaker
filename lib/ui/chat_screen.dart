@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-
+import '../repository/gemini_repository.dart';
+import '../service/gemini_api_service.dart';
 import 'message_box.dart';
+import '../secrets.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -12,20 +14,50 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final List<Map<String, dynamic>> _messages = [];
   final TextEditingController _controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  late final GeminiRepository _repository;
 
   @override
   void initState() {
     super.initState();
     _messages.add({'text': 'Hello!', 'sender': 'AI'});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
+    });
+    final apiService = GeminiApiService(apiKey: geminiApiKey);
+    _repository = GeminiRepositoryImpl(apiService: apiService);
   }
-  void _handleSubmitted(String text) {
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleSubmitted(String text) async {
     if (text.isEmpty) return;
+    final response = await _repository.sendMessage(text);
+    print(response);
     _controller.clear();
 
     setState(() {
       _messages.add({'text': text, 'sender': 'User'});
-      _messages.add({'text': 'AI Response to "$text"', 'sender': 'AI'});
+      _messages.add({'text': response, 'sender': 'AI'});
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
+    });
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   @override
@@ -52,6 +84,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildBodyPage() {
     return ListView.builder(
+      controller: _scrollController,
       padding: const EdgeInsets.symmetric(vertical: 10.0),
       itemCount: _messages.length,
       itemBuilder: (context, index) {
